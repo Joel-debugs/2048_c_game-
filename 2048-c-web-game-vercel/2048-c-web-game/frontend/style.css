@@ -151,7 +151,6 @@ h1 {
     font-weight: 900;
     font-size: clamp(24px, 8vw, 48px);
     transition:
-        transform 100ms ease,
         background 100ms ease,
         color 100ms ease;
 }

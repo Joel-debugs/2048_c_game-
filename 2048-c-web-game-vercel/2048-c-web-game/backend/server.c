@@ -333,14 +333,43 @@ static int get_content_length(const char *request)
 static void handle_client(socket_t client)
 {
     char buffer[BUFFER_SIZE + 1];
-    int received = recv(client, buffer, BUFFER_SIZE, 0);
+    int total_received = 0;
+    char *header_end = NULL;
 
-    if (received <= 0) {
+    /*
+     * A request can arrive split across multiple TCP segments (slow
+     * network, small MTU, etc.). Keep reading until we see the blank
+     * line that ends the headers, the client disconnects, or our fixed
+     * buffer is full -- never assume one recv() call has everything.
+     */
+    while (total_received < BUFFER_SIZE) {
+        int received = recv(
+            client,
+            buffer + total_received,
+            BUFFER_SIZE - total_received,
+            0
+        );
+
+        if (received <= 0) {
+            break;
+        }
+
+        total_received += received;
+        buffer[total_received] = '\0';
+
+        header_end = strstr(buffer, "\r\n\r\n");
+
+        if (header_end) {
+            break;
+        }
+    }
+
+    if (total_received == 0) {
         CLOSE_SOCKET(client);
         return;
     }
 
-    buffer[received] = '\0';
+    buffer[total_received] = '\0';
 
     char method[16] = {0};
     char path[256] = {0};
@@ -368,10 +397,7 @@ static void handle_client(socket_t client)
         return;
     }
 
-    const char *body = strstr(buffer, "\r\n\r\n");
-    int content_length = get_content_length(buffer);
-
-    if (!body) {
+    if (!header_end) {
         send_response(
             client,
             "400 Bad Request",
@@ -382,11 +408,11 @@ static void handle_client(socket_t client)
         return;
     }
 
-    body += 4;
+    int content_length = get_content_length(buffer);
 
     /*
-     * For this small local game API, the browser request fits in one recv.
-     * Reject unusually large requests rather than using unsafe buffers.
+     * Reject unusually large requests rather than trying to grow the
+     * fixed-size buffer to fit them.
      */
     if (content_length < 0 || content_length > BODY_SIZE) {
         send_response(
@@ -408,6 +434,41 @@ static void handle_client(socket_t client)
         );
         CLOSE_SOCKET(client);
         return;
+    }
+
+    char *body = header_end + 4;
+    int header_length = (int)(body - buffer);
+    int body_received = total_received - header_length;
+    int max_body_capacity = BUFFER_SIZE - header_length;
+
+    /* Defensive: never read past the buffer even if BODY_SIZE were misconfigured. */
+    if (content_length > max_body_capacity) {
+        send_response(
+            client,
+            "413 Payload Too Large",
+            "application/json; charset=utf-8",
+            "{\"error\":\"Request body too large\"}"
+        );
+        CLOSE_SOCKET(client);
+        return;
+    }
+
+    /* Keep reading until the full declared body has actually arrived. */
+    while (body_received < content_length && total_received < BUFFER_SIZE) {
+        int received = recv(
+            client,
+            buffer + total_received,
+            BUFFER_SIZE - total_received,
+            0
+        );
+
+        if (received <= 0) {
+            break;
+        }
+
+        total_received += received;
+        body_received += received;
+        buffer[total_received] = '\0';
     }
 
     char response[4096];
