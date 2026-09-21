@@ -1,0 +1,25 @@
+# Vercel container deployment for the C 2048 HTTP server.
+FROM debian:bookworm-slim AS build
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY backend/game.h backend/game.c backend/server.c /app/backend/
+COPY frontend /app/frontend/
+
+WORKDIR /app/backend
+
+RUN gcc -Wall -Wextra -std=c11 game.c server.c -o 2048_server
+
+# Runtime image
+FROM debian:bookworm-slim
+
+WORKDIR /app/backend
+COPY --from=build /app/backend/2048_server /app/backend/2048_server
+COPY --from=build /app/frontend /app/frontend
+
+EXPOSE 8080
+
+CMD ["/app/backend/2048_server"]

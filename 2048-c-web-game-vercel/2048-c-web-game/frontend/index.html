@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="2048 game with the game engine implemented in C">
+    <title>2048 — C Game Engine</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <main class="game-shell">
+        <header class="topbar">
+            <div>
+                <h1>2048</h1>
+                <p class="subtitle">C-powered game engine</p>
+            </div>
+
+            <div class="score-card">
+                <span>Score</span>
+                <strong id="score">0</strong>
+            </div>
+        </header>
+
+        <section class="controls">
+            <button id="new-game" class="new-game" type="button">
+                New Game
+            </button>
+            <p class="hint">
+                Use <strong>Arrow Keys</strong> or <strong>W A S D</strong>
+            </p>
+        </section>
+
+        <section class="game-area" aria-label="2048 game">
+            <div id="board" class="board" aria-label="4 by 4 game board"></div>
+
+            <div id="overlay" class="overlay hidden">
+                <div class="overlay-card">
+                    <h2 id="overlay-title">You Win!</h2>
+                    <p id="overlay-message">You reached 2048.</p>
+                    <button id="overlay-button" class="new-game" type="button">
+                        New Game
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="status-panel">
+            <span class="status-label">Engine status</span>
+            <strong id="status">PLAYING</strong>
+        </section>
+
+        <section class="instructions">
+            <h2>How to play</h2>
+            <p>
+                Combine equal numbered tiles to reach <strong>2048</strong>.
+                Every valid move creates one new tile. Invalid moves do not
+                create a tile.
+            </p>
+            <p>
+                The board, movement, merging, random tiles, score, win
+                detection, and game-over detection are handled by the
+                <strong>C game engine</strong>.
+            </p>
+        </section>
+
+        <footer>
+            <span>HTML + CSS + JavaScript frontend</span>
+            <span>C backend / game engine</span>
+        </footer>
+    </main>
+
+    <script src="/script.js"></script>
+</body>
+</html>

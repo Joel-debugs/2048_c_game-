@@ -1,0 +1,343 @@
+:root {
+    --background: #f7f4ef;
+    --panel: #ffffff;
+    --board: #bbada0;
+    --empty: rgba(238, 228, 218, 0.55);
+    --text: #514b45;
+    --muted: #8a8179;
+    --accent: #8f7a66;
+    --gap: 10px;
+    --radius: 18px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top, #fffdf9 0, var(--background) 48%, #eee9e2 100%);
+    color: var(--text);
+    font-family:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    display: grid;
+    place-items: center;
+    padding: 28px 16px;
+}
+
+.game-shell {
+    width: min(100%, 560px);
+}
+
+.topbar {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+h1 {
+    font-size: clamp(64px, 13vw, 92px);
+    line-height: 0.8;
+    margin: 0;
+    letter-spacing: -6px;
+    font-weight: 900;
+}
+
+.subtitle {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.score-card {
+    min-width: 110px;
+    padding: 12px 18px;
+    border-radius: 14px;
+    background: var(--accent);
+    color: white;
+    text-align: center;
+    box-shadow: 0 10px 24px rgba(74, 58, 44, 0.15);
+}
+
+.score-card span {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.75;
+    font-weight: 800;
+}
+
+.score-card strong {
+    display: block;
+    font-size: 26px;
+    margin-top: 3px;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.new-game {
+    border: 0;
+    border-radius: 12px;
+    background: #776e65;
+    color: white;
+    padding: 12px 18px;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 120ms ease, filter 120ms ease;
+}
+
+.new-game:hover {
+    filter: brightness(1.08);
+}
+
+.new-game:active {
+    transform: translateY(1px);
+}
+
+.hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: right;
+}
+
+.game-area {
+    position: relative;
+    padding: var(--gap);
+    border-radius: 22px;
+    background: var(--board);
+    box-shadow:
+        0 24px 60px rgba(68, 51, 38, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    touch-action: none;
+    user-select: none;
+}
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--gap);
+    aspect-ratio: 1;
+}
+
+.tile {
+    aspect-ratio: 1;
+    min-width: 0;
+    border-radius: var(--radius);
+    background: var(--empty);
+    display: grid;
+    place-items: center;
+    font-weight: 900;
+    font-size: clamp(24px, 8vw, 48px);
+    transition:
+        transform 100ms ease,
+        background 100ms ease,
+        color 100ms ease;
+}
+
+.tile[data-value="0"] {
+    color: transparent;
+}
+
+.tile[data-value="2"] {
+    background: #eee4da;
+}
+
+.tile[data-value="4"] {
+    background: #ede0c8;
+}
+
+.tile[data-value="8"] {
+    background: #f2b179;
+    color: white;
+}
+
+.tile[data-value="16"] {
+    background: #f59563;
+    color: white;
+}
+
+.tile[data-value="32"] {
+    background: #f67c5f;
+    color: white;
+}
+
+.tile[data-value="64"] {
+    background: #f65e3b;
+    color: white;
+}
+
+.tile[data-value="128"] {
+    background: #edcf72;
+    color: white;
+    font-size: clamp(20px, 6vw, 38px);
+}
+
+.tile[data-value="256"] {
+    background: #edcc61;
+    color: white;
+    font-size: clamp(20px, 6vw, 38px);
+}
+
+.tile[data-value="512"] {
+    background: #edc850;
+    color: white;
+    font-size: clamp(20px, 6vw, 38px);
+}
+
+.tile[data-value="1024"],
+.tile[data-value="2048"] {
+    background: #edc53f;
+    color: white;
+    font-size: clamp(17px, 5.2vw, 34px);
+    box-shadow: 0 0 26px rgba(237, 197, 63, 0.45);
+}
+
+.status-panel {
+    margin-top: 14px;
+    padding: 12px 15px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.72);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid rgba(119, 110, 101, 0.12);
+}
+
+.status-label {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+#status {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+}
+
+.instructions {
+    margin-top: 18px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.66);
+    border: 1px solid rgba(119, 110, 101, 0.1);
+}
+
+.instructions h2 {
+    margin: 0 0 8px;
+    font-size: 17px;
+}
+
+.instructions p {
+    margin: 7px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 15px;
+    color: #9b9188;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 22px;
+    background: rgba(250, 248, 244, 0.78);
+    backdrop-filter: blur(5px);
+    display: grid;
+    place-items: center;
+    z-index: 10;
+    animation: fadeIn 160ms ease-out;
+}
+
+.overlay.hidden {
+    display: none;
+}
+
+.overlay-card {
+    width: min(84%, 330px);
+    padding: 28px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.94);
+    border-radius: 20px;
+    box-shadow: 0 20px 55px rgba(70, 55, 42, 0.18);
+}
+
+.overlay-card h2 {
+    margin: 0;
+    font-size: 36px;
+}
+
+.overlay-card p {
+    margin: 8px 0 20px;
+    color: var(--muted);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@media (max-width: 520px) {
+    body {
+        padding: 18px 10px;
+    }
+
+    .topbar {
+        align-items: center;
+    }
+
+    .controls {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .hint {
+        text-align: left;
+    }
+
+    .new-game {
+        width: 100%;
+    }
+
+    footer {
+        flex-direction: column;
+    }
+
+    :root {
+        --gap: 8px;
+        --radius: 13px;
+    }
+}
