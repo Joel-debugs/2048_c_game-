@@ -22,35 +22,24 @@ let requestInProgress = false;
 let touchStartX = 0;
 let touchStartY = 0;
 
-/*
- * Create the 16 tile elements once.
- *
- * The frontend previously destroyed and recreated the entire board after
- * every move. Keeping the same DOM nodes avoids unnecessary layout churn
- * and visual flicker. C remains the authoritative game engine.
- */
-const tiles = [];
-
-for (let i = 0; i < 16; i++) {
-    const tile = document.createElement("div");
-    tile.className = "tile";
-    tile.dataset.value = "0";
-    boardElement.appendChild(tile);
-    tiles.push(tile);
-}
-
 function renderGame(state) {
-    /* The C server supplies the complete authoritative game state. */
-    let index = 0;
+    boardElement.replaceChildren();
 
     state.board.forEach((row) => {
         row.forEach((value) => {
-            const tile = tiles[index];
+            const tile = document.createElement("div");
 
+            tile.className = "tile";
             tile.dataset.value = String(value);
             tile.textContent = value === 0 ? "" : String(value);
 
-            index++;
+            /* CSS only enumerates styling up to 2048; the C engine allows
+             * play to continue past a win, so tiles can exceed that. */
+            if (value > 2048) {
+                tile.classList.add("tile-high");
+            }
+
+            boardElement.appendChild(tile);
         });
     });
 
@@ -101,7 +90,7 @@ async function requestNewGame() {
         const state = await response.json();
         renderGame(state);
     } catch (error) {
-        console.error("New game error:", error);
+        console.error(error);
         statusElement.textContent = "SERVER ERROR";
     } finally {
         requestInProgress = false;
@@ -121,18 +110,23 @@ async function sendMove(direction) {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ direction })
+            body: JSON.stringify({
+                direction
+            })
         });
 
         if (!response.ok) {
             throw new Error(`Server returned ${response.status}`);
         }
 
-        /* C performs all movement, merging, scoring, and status logic. */
+        /*
+         * The returned JSON is the authoritative game state.
+         * JavaScript does not calculate movement, merging, score, or game over.
+         */
         const state = await response.json();
         renderGame(state);
     } catch (error) {
-        console.error("Move error:", error);
+        console.error(error);
         statusElement.textContent = "SERVER ERROR";
     } finally {
         requestInProgress = false;
@@ -170,9 +164,8 @@ document.addEventListener("keydown", (event) => {
 newGameButton.addEventListener("click", requestNewGame);
 overlayButton.addEventListener("click", requestNewGame);
 
-const gameArea = document.querySelector(".game-area");
-
-gameArea.addEventListener(
+/* Basic swipe support for mobile. */
+document.querySelector(".game-area").addEventListener(
     "touchstart",
     (event) => {
         const touch = event.changedTouches[0];
@@ -182,12 +175,14 @@ gameArea.addEventListener(
     { passive: true }
 );
 
-gameArea.addEventListener(
+document.querySelector(".game-area").addEventListener(
     "touchend",
     (event) => {
         const touch = event.changedTouches[0];
+
         const dx = touch.clientX - touchStartX;
         const dy = touch.clientY - touchStartY;
+
         const minimumSwipe = 35;
 
         if (Math.max(Math.abs(dx), Math.abs(dy)) < minimumSwipe) {
@@ -203,4 +198,5 @@ gameArea.addEventListener(
     { passive: true }
 );
 
+/* Ask the C server for the initial game state. */
 requestNewGame();

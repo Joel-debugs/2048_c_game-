@@ -151,6 +151,7 @@ h1 {
     font-weight: 900;
     font-size: clamp(24px, 8vw, 48px);
     transition:
+        transform 100ms ease,
         background 100ms ease,
         color 100ms ease;
 }
@@ -211,6 +212,15 @@ h1 {
     color: white;
     font-size: clamp(17px, 5.2vw, 34px);
     box-shadow: 0 0 26px rgba(237, 197, 63, 0.45);
+}
+
+/* Play can continue past 2048 (the engine only flags WON, it doesn't stop
+ * the game), so anything above 2048 needs a style too. */
+.tile.tile-high {
+    background: #3c3a32;
+    color: white;
+    font-size: clamp(14px, 4.6vw, 28px);
+    box-shadow: 0 0 30px rgba(60, 58, 50, 0.5);
 }
 
 .status-panel {

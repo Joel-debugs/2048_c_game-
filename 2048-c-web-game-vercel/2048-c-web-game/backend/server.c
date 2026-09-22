@@ -26,6 +26,7 @@ typedef SOCKET socket_t;
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
 typedef int socket_t;
@@ -330,46 +331,101 @@ static int get_content_length(const char *request)
     return atoi(header);
 }
 
+/*
+ * A single recv() call is not guaranteed to return the whole request:
+ * slow clients, mobile networks, and proxies can split it across many
+ * TCP segments. This reads until the header block ("\r\n\r\n") is fully
+ * present, then keeps reading until the advertised Content-Length worth
+ * of body has also arrived (bounded by the buffer size).
+ *
+ * Returns 1 with *out_total set to the number of bytes in buffer, or 0 if
+ * the connection closed/errored before a full header block was received.
+ * buffer is always null-terminated within [0, buffer_capacity).
+ */
+static int recv_full_request(socket_t client, char *buffer, int buffer_capacity, int *out_total)
+{
+    int total = 0;
+    int header_end = -1;
+
+    /* Phase 1: read until the header block is complete. */
+    while (total < buffer_capacity - 1) {
+        int n = recv(client, buffer + total, buffer_capacity - 1 - total, 0);
+
+        if (n <= 0) {
+            return 0;
+        }
+
+        total += n;
+        buffer[total] = '\0';
+
+        char *separator = strstr(buffer, "\r\n\r\n");
+
+        if (separator) {
+            header_end = (int)(separator - buffer) + 4;
+            break;
+        }
+    }
+
+    if (header_end < 0) {
+        /* Headers never completed (client too slow, or header block too large). */
+        buffer[total] = '\0';
+        *out_total = total;
+        return 0;
+    }
+
+    int content_length = get_content_length(buffer);
+
+    if (content_length < 0) {
+        content_length = 0;
+    }
+
+    /*
+     * Cap how much body we'll actually try to buffer. If the client
+     * claims a body larger than fits, read only up to capacity; the
+     * caller still sees the true Content-Length via get_content_length()
+     * and can reject the request (e.g. 413) instead of hanging forever
+     * trying to fill a buffer that can never hold it all.
+     */
+    int needed_total = header_end + content_length;
+
+    if (needed_total > buffer_capacity - 1) {
+        needed_total = buffer_capacity - 1;
+    }
+
+    /* Phase 2: keep reading until the full body (or our cap) has arrived. */
+    while (total < needed_total) {
+        int n = recv(client, buffer + total, buffer_capacity - 1 - total, 0);
+
+        if (n <= 0) {
+            break;
+        }
+
+        total += n;
+    }
+
+    buffer[total] = '\0';
+    *out_total = total;
+    return 1;
+}
+
 static void handle_client(socket_t client)
 {
     char buffer[BUFFER_SIZE + 1];
-    int total_received = 0;
-    char *header_end = NULL;
+    int received = 0;
 
-    /*
-     * A request can arrive split across multiple TCP segments (slow
-     * network, small MTU, etc.). Keep reading until we see the blank
-     * line that ends the headers, the client disconnects, or our fixed
-     * buffer is full -- never assume one recv() call has everything.
-     */
-    while (total_received < BUFFER_SIZE) {
-        int received = recv(
-            client,
-            buffer + total_received,
-            BUFFER_SIZE - total_received,
-            0
-        );
-
-        if (received <= 0) {
-            break;
+    if (!recv_full_request(client, buffer, sizeof(buffer), &received)) {
+        if (received > 0) {
+            send_response(
+                client,
+                "400 Bad Request",
+                "text/plain; charset=utf-8",
+                "Incomplete request"
+            );
         }
 
-        total_received += received;
-        buffer[total_received] = '\0';
-
-        header_end = strstr(buffer, "\r\n\r\n");
-
-        if (header_end) {
-            break;
-        }
-    }
-
-    if (total_received == 0) {
         CLOSE_SOCKET(client);
         return;
     }
-
-    buffer[total_received] = '\0';
 
     char method[16] = {0};
     char path[256] = {0};
@@ -397,7 +453,10 @@ static void handle_client(socket_t client)
         return;
     }
 
-    if (!header_end) {
+    const char *body = strstr(buffer, "\r\n\r\n");
+    int content_length = get_content_length(buffer);
+
+    if (!body) {
         send_response(
             client,
             "400 Bad Request",
@@ -408,11 +467,11 @@ static void handle_client(socket_t client)
         return;
     }
 
-    int content_length = get_content_length(buffer);
+    body += 4;
 
     /*
-     * Reject unusually large requests rather than trying to grow the
-     * fixed-size buffer to fit them.
+     * For this small local game API, the browser request fits in one recv.
+     * Reject unusually large requests rather than using unsafe buffers.
      */
     if (content_length < 0 || content_length > BODY_SIZE) {
         send_response(
@@ -425,6 +484,26 @@ static void handle_client(socket_t client)
         return;
     }
 
+    /*
+     * recv_full_request() tries to read the whole advertised body, but a
+     * client can still disconnect mid-send. Detect that explicitly instead
+     * of silently handing truncated JSON to the parser below.
+     */
+    {
+        int body_bytes_received = received - (int)(body - buffer);
+
+        if (body_bytes_received < content_length) {
+            send_response(
+                client,
+                "400 Bad Request",
+                "application/json; charset=utf-8",
+                "{\"error\":\"Incomplete request body\"}"
+            );
+            CLOSE_SOCKET(client);
+            return;
+        }
+    }
+
     if (strcmp(method, "POST") != 0) {
         send_response(
             client,
@@ -434,41 +513,6 @@ static void handle_client(socket_t client)
         );
         CLOSE_SOCKET(client);
         return;
-    }
-
-    char *body = header_end + 4;
-    int header_length = (int)(body - buffer);
-    int body_received = total_received - header_length;
-    int max_body_capacity = BUFFER_SIZE - header_length;
-
-    /* Defensive: never read past the buffer even if BODY_SIZE were misconfigured. */
-    if (content_length > max_body_capacity) {
-        send_response(
-            client,
-            "413 Payload Too Large",
-            "application/json; charset=utf-8",
-            "{\"error\":\"Request body too large\"}"
-        );
-        CLOSE_SOCKET(client);
-        return;
-    }
-
-    /* Keep reading until the full declared body has actually arrived. */
-    while (body_received < content_length && total_received < BUFFER_SIZE) {
-        int received = recv(
-            client,
-            buffer + total_received,
-            BUFFER_SIZE - total_received,
-            0
-        );
-
-        if (received <= 0) {
-            break;
-        }
-
-        total_received += received;
-        body_received += received;
-        buffer[total_received] = '\0';
     }
 
     char response[4096];
@@ -530,6 +574,16 @@ int main(void)
         fprintf(stderr, "WSAStartup failed.\n");
         return 1;
     }
+#else
+    /*
+     * Without this, writing to a socket after the client has already
+     * closed its end raises SIGPIPE, whose default action terminates the
+     * whole process. Since this server handles one client at a time in a
+     * single process, that turns "a client disconnected early" into
+     * "the server is down for everyone." Ignoring SIGPIPE makes send()
+     * return -1/EPIPE instead, which send_all() already handles safely.
+     */
+    signal(SIGPIPE, SIG_IGN);
 #endif
 
     socket_t server_socket = socket(AF_INET, SOCK_STREAM, 0);
